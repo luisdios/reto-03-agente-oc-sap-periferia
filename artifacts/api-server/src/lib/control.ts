@@ -72,6 +72,15 @@ function parseJsonArray(value: string): string[] {
   }
 }
 
+function isAlreadyExists(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "EEXIST"
+  );
+}
+
 export async function readControlRecords(root: string): Promise<ControlRecord[]> {
   const path = join(root, "out", "control.csv");
   let content: string;
@@ -85,7 +94,7 @@ export async function readControlRecords(root: string): Promise<ControlRecord[]>
   return content
     .split(/\r?\n/)
     .slice(1)
-    .filter((line) => line.length > 0)
+    .filter((line) => line.length > 0 && line !== HEADER.trimEnd())
     .map((line) => splitCsvLine(line))
     .filter((fields) => fields.length >= 7)
     .map((fields) => ({
@@ -109,9 +118,9 @@ export async function appendControlRecord(
     await mkdir(directory, { recursive: true });
 
     try {
-      await readFile(path);
-    } catch {
-      await writeFile(path, HEADER, "utf8");
+      await writeFile(path, HEADER, { encoding: "utf8", flag: "wx" });
+    } catch (error) {
+      if (!isAlreadyExists(error)) throw error;
     }
 
     await appendFile(path, toCsvRow(record), "utf8");

@@ -7,7 +7,7 @@ Prototipo conversacional en español para validar solicitudes de compra y crear 
 - `pnpm dev` — start the web app and API server together locally.
 - `pnpm run typecheck` — typecheck workspace libraries and artifacts.
 - `pnpm run test:oc` — run deterministic tests against copied fixtures.
-- `pnpm run demo` or `bun run demo.ts` — run the six-case demo without Gemini; refuses to overwrite an existing `out/`.
+- `pnpm run demo` or `bun run demo.ts` — run the six-case demo without Gemini; explicitly simulates approval for sol-004 and refuses to overwrite an existing `out/`.
 - Required secret: `GEMINI_API_KEY` — configure in Replit Secrets or export it locally.
 - Optional env: `GEMINI_MODEL`, `AGENT_MAX_ITERATIONS`, `AGENT_MAX_SESSION_TOKENS`, `AGENT_MAX_PROCESS_TOKENS_PER_DAY`, `API_SERVER_PORT`, `WEB_PORT`.
 

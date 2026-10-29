@@ -42,7 +42,7 @@ También puedes ejecutar la demo sin el servidor:
 bun run demo.ts
 ```
 
-La demo no llama a Gemini ni aprueba excepciones automáticamente. Se detiene si `out/` ya existe para no sobrescribir resultados previos. En esa situación, conserva los archivos y mueve o archiva `out/` antes de iniciar otra demo.
+La demo no llama a Gemini. Muestra sol-004 pendiente y simula después una confirmación humana explícita para comprobar el flujo completo; sol-005 y sol-006 quedan pendientes. Se detiene si `out/` ya existe para no sobrescribir resultados previos. En esa situación, conserva los archivos y mueve o archiva `out/` antes de iniciar otra demo.
 
 ## Variables
 

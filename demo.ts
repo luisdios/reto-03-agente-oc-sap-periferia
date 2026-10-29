@@ -54,7 +54,6 @@ async function call(
 
 async function processCase(
   caso: string,
-  humanConfirmation = false,
 ): Promise<{
   apta: boolean;
   bloqueos: string[];
@@ -134,7 +133,7 @@ async function processCase(
     };
   }
 
-  if (confirmaciones.length > 0 && !humanConfirmation) {
+  if (confirmaciones.length > 0) {
     return {
       apta,
       bloqueos,
@@ -146,10 +145,11 @@ async function processCase(
     };
   }
 
-  const createContext = humanConfirmation
-    ? { ...baseContext, humanConfirmedCase: caso }
-    : { ...baseContext, allowAutomaticCreateCase: caso };
-  const created = await call("oc_crear", { caso, confirmado: humanConfirmation }, createContext);
+  const created = await call(
+    "oc_crear",
+    { caso, confirmado: false },
+    { ...baseContext, allowAutomaticCreateCase: caso },
+  );
   if (!created.ok || !created.data) {
     return {
       apta,
@@ -205,6 +205,37 @@ console.log(
 for (const caso of CASES) {
   const result = await processCase(caso);
   printCase(caso, result);
+
+  if (
+    caso === "sol-004" &&
+    result.apta &&
+    result.confirmaciones.length > 0 &&
+    result.numeroOc === null
+  ) {
+    console.log(
+      "Confirmación explícita simulada en la demo: «Confirmo la creación de sol-004».",
+    );
+    const confirmed = await call(
+      "oc_crear",
+      { caso, confirmado: true },
+      { directory: root, sessionId, humanConfirmedCase: caso },
+    );
+    const numeroOc =
+      typeof confirmed.data?.numero_oc === "string"
+        ? confirmed.data.numero_oc
+        : null;
+    if (!confirmed.ok || !numeroOc) {
+      throw new Error(
+        confirmed.error ?? "No se creó sol-004 tras la confirmación explícita de demo.",
+      );
+    }
+    printCase(`${caso} (tras confirmación explícita)`, {
+      ...result,
+      numeroOc,
+      idempotente: confirmed.data?.idempotente === true,
+      motivo: null,
+    });
+  }
 
   if (caso === "sol-001" && result.numeroOc) {
     const repeated = await processCase(caso);
