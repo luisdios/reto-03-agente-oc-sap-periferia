@@ -1,4 +1,5 @@
-import { appendFile, mkdir, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { executeAgentTool } from "./artifacts/api-server/src/tools/oc";
 import { outputDirectory, workspaceRoot } from "./artifacts/api-server/src/lib/workspace-paths";
@@ -191,11 +192,18 @@ function printCase(
   );
 }
 
-await rm(out, { recursive: true, force: true });
-console.log("Demo determinística · SAP simulado · sin llamadas a Gemini");
+if (existsSync(out)) {
+  throw new Error(
+    "out/ ya existe. Conserva o mueve esos resultados antes de ejecutar la demo; no se sobrescribirán.",
+  );
+}
+
+console.log(
+  "Demo determinística · SAP simulado · sin llamadas a Gemini · sin aprobar excepciones automáticamente",
+);
 
 for (const caso of CASES) {
-  const result = await processCase(caso, caso === "sol-004");
+  const result = await processCase(caso);
   printCase(caso, result);
 
   if (caso === "sol-001" && result.numeroOc) {

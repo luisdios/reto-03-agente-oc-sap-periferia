@@ -42,7 +42,7 @@ También puedes ejecutar la demo sin el servidor:
 bun run demo.ts
 ```
 
-La demo no llama a Gemini. **Al iniciar elimina el directorio `out/` y lo vuelve a crear** para que los números secuenciales y resultados sean reproducibles. No la ejecutes si necesitas conservar datos generados anteriormente en `out/`.
+La demo no llama a Gemini ni aprueba excepciones automáticamente. Se detiene si `out/` ya existe para no sobrescribir resultados previos. En esa situación, conserva los archivos y mueve o archiva `out/` antes de iniciar otra demo.
 
 ## Variables
 

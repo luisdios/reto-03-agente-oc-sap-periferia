@@ -1,0 +1,1 @@
+- [Gemini credential validation](gemini-credential-validation.md) — a configured secret can still be rejected; test a real, non-creating Gemini request.

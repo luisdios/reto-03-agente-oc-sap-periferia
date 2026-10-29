@@ -910,7 +910,28 @@ export async function sendMessage(
     providerError = true;
     reply =
       "No pude consultar Gemini en este momento. Verifica la conexión e inténtalo de nuevo.";
-    logger.warn({ sessionId }, "Gemini request failed");
+    const details: Record<string, string | number> = {
+      sessionId,
+      errorType: error instanceof Error ? error.name : typeof error,
+    };
+    if (error instanceof Error) {
+      details.providerMessage = error.message
+        .replace(/\bAIza[\w-]{20,}\b/g, "[redacted]")
+        .replace(/([?&]key=)[^&\s]+/gi, "$1[redacted]")
+        .slice(0, 300);
+    }
+    if (typeof error === "object" && error !== null) {
+      const providerFailure = error as {
+        status?: unknown;
+        statusCode?: unknown;
+      };
+      const status =
+        typeof providerFailure.status === "number"
+          ? providerFailure.status
+          : providerFailure.statusCode;
+      if (typeof status === "number") details.httpStatus = status;
+    }
+    logger.warn(details, "Gemini request failed");
   }
 
   let pendingCase: string | null = null;
