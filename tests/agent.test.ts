@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { cp, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -83,11 +83,26 @@ test("HTTP: seis casos, confirmaciones ambiguas, cancelación, idempotencia, his
   assert.equal((await orders()).length, 0);
   assert.ok(pending.toolCalls.every((call) => call.name && call.args && call.result));
 
-  for (const text of ["¿Qué pasa si confirmo?", "Tal vez confirmo luego", "Confirmo si se corrige el monto", "Confirmo sol-005"]) {
+  for (const text of [
+    "¿Qué pasa si confirmo?", "Tal vez confirmo luego", "Confirmo si se corrige el monto",
+    "Confirmo sol-005", "Confirmo recepción de la información", "Confirmo cancelar",
+    "Sí", "OK", "Confirmo", "Autorizo la revisión",
+    "Confirmo crear la orden sol-005 y acepto las excepciones mostradas.",
+  ]) {
     assert.equal((await message("http-sol004", text)).needsConfirmation, true);
     assert.equal((await orders()).length, 0);
   }
-  assert.equal((await message("http-sol004", "Confirmo sol-004")).needsConfirmation, false);
+  const quotePath = join(root, "fixtures/reto-03/solicitudes/sol-004/cotizacion.txt");
+  const quote = await readFile(quotePath, "utf8");
+  const changedQuote = quote.replace("26.500.000", "27.500.000");
+  assert.notEqual(changedQuote, quote);
+  await writeFile(quotePath, changedQuote);
+  const stale = await message("http-sol004", "Confirmo crear la orden sol-004 y acepto las excepciones mostradas.");
+  assert.match(stale.reply, /cambiaron/);
+  assert.equal(stale.needsConfirmation, true);
+  assert.equal((await orders()).length, 0);
+  await writeFile(quotePath, quote);
+  assert.equal((await message("http-sol004", "Caso seleccionado: sol-004 (SOL-2026-004). Confirmo crear la orden sol-004 y acepto las excepciones mostradas.")).needsConfirmation, false);
   assert.equal((await orders()).length, 1);
 
   await message("http-clean-hold", "Procesa sol-001 pero no la crees.");
@@ -95,7 +110,7 @@ test("HTTP: seis casos, confirmaciones ambiguas, cancelación, idempotencia, his
   assert.ok((await readControlRecords(root)).some((row) =>
     row.solicitudId === "SOL-2026-001" && row.resultado === "pendiente",
   ));
-  await message("http-clean-hold", "No");
+  assert.match((await message("http-clean-hold", "Cancelo")).reply, /cancelada/);
   await message("http-clean-auto", "Procesa sol-001");
   const first = (await orders()).find((order) => order.referencia.solicitud_id === "SOL-2026-001");
   assert.ok(first);
@@ -111,7 +126,7 @@ test("HTTP: seis casos, confirmaciones ambiguas, cancelación, idempotencia, his
     assert.equal((await orders()).length, count);
     const retry = `${session}-confirmed`;
     await message(retry, `Procesa ${caso}`);
-    await message(retry, `Confirmo ${caso}`);
+    await message(retry, `Confirmo crear la orden ${caso} y acepto las excepciones mostradas.`);
     assert.equal((await orders()).length, count + 1);
   }
   const retroactive = (await orders()).find((order) => order.referencia.solicitud_id === "SOL-2026-005");

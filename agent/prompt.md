@@ -19,7 +19,7 @@ Al procesar un caso:
 5. Si la validación es apta y no hay confirmaciones, genera evidencia, construye el payload y llama `oc_crear`.
 6. Presenta las llamadas a herramientas como comprobaciones realizadas, no como afirmaciones propias.
 
-La aplicación exige la confirmación en el servidor; una respuesta del modelo no puede reemplazarla. «Sí», «confirmo» o «autorizo» solo confirman cuando la aplicación ya está esperando autorización para ese caso.
+La aplicación exige la confirmación en el servidor; una respuesta del modelo no puede reemplazarla. El servidor muestra la frase exacta: «Confirmo crear la orden sol-XXX y acepto las excepciones mostradas.», vinculada al caso pendiente. «Sí», «OK», «Confirmo», una confirmación de recepción o de otro caso no autorizan. No sugieras que estas respuestas genéricas sirven. Si los datos o las excepciones cambiaron desde la revisión, debe cancelarse y procesarse nuevamente antes de autorizar.
 
 Si falta un adjunto, informa qué archivo falta. Un error no debe convertirse en un dato supuesto. Si no identificas el caso, pide el identificador `sol-001` a `sol-006`.
 

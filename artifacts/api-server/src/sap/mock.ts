@@ -2,11 +2,13 @@ import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { caseDirectory } from "../lib/workspace-paths";
-import { ProveedorSchema, type OrdenCompra, type Proveedor } from "./types";
+import { OrdenCompraSchema, ProveedorSchema, type OrdenCompra, type Proveedor } from "./types";
 import type { SapAdapter } from "./adapter";
 
 const StoredOrderSchema = z.object({
-  numero_oc: z.string(),
+  numero_oc: z.string().regex(/^\d+$/).refine(
+    (value) => Number.isSafeInteger(Number(value)) && Number(value) >= 4500000001,
+  ),
   fecha: z.string(),
   referencia: z.object({
     solicitud_id: z.string(),
@@ -17,7 +19,7 @@ const StoredOrderSchema = z.object({
   moneda: z.enum(["COP", "USD"]),
   total: z.number().finite(),
   retroactiva: z.boolean(),
-  orden: z.unknown(),
+  orden: OrdenCompraSchema,
 });
 
 type StoredOrder = z.infer<typeof StoredOrderSchema>;
@@ -39,23 +41,35 @@ async function readProviders(root: string): Promise<Proveedor[]> {
 }
 
 async function readStoredOrders(root: string): Promise<StoredOrder[]> {
+  let raw: string;
   try {
-    const raw = await readFile(join(root, "out", "sap", "ordenes.jsonl"), "utf8");
-    return raw
-      .split(/\r?\n/)
-      .filter((line) => line.length > 0)
-      .flatMap((line) => {
-        try {
-          const item: unknown = JSON.parse(line);
-          const parsed = StoredOrderSchema.safeParse(item);
-          return parsed.success ? [parsed.data] : [];
-        } catch {
-          return [];
-        }
-      });
-  } catch {
-    return [];
+    raw = await readFile(join(root, "out", "sap", "ordenes.jsonl"), "utf8");
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
+      return [];
+    }
+    throw new Error("No se pudo leer el historial SAP. No es seguro crear órdenes.");
   }
+  const orders: StoredOrder[] = [];
+  const numbers = new Set<string>();
+  const references = new Set<string>();
+  for (const [index, line] of raw.split(/\r?\n/).entries()) {
+    if (!line.trim()) continue;
+    let order: StoredOrder;
+    try {
+      order = StoredOrderSchema.parse(JSON.parse(line) as unknown);
+    } catch {
+      throw new Error(`Historial SAP inválido en línea ${index + 1}. No es seguro crear órdenes.`);
+    }
+    if (numbers.has(order.numero_oc) || references.has(order.referencia.solicitud_id) ||
+        order.orden.referencia.solicitud_id !== order.referencia.solicitud_id) {
+      throw new Error("Historial SAP inconsistente o duplicado. No es seguro crear órdenes.");
+    }
+    numbers.add(order.numero_oc);
+    references.add(order.referencia.solicitud_id);
+    orders.push(order);
+  }
+  return orders;
 }
 
 export class MockSapAdapter implements SapAdapter {
@@ -105,6 +119,9 @@ export class MockSapAdapter implements SapAdapter {
         const value = Number(item.numero_oc);
         return Number.isFinite(value) ? Math.max(maximum, value) : maximum;
       }, 4500000000);
+      if (!Number.isSafeInteger(highest + 1)) {
+        throw new Error("No es seguro asignar otro número de orden al historial SAP.");
+      }
       const numero_oc = String(highest + 1);
       const fecha = new Date().toISOString();
       const total = orden.posiciones.reduce(

@@ -176,7 +176,8 @@ function ChatPage() {
 
   const transmit = (message: string) => {
     if (!message.trim() || sendMutation.isPending) return;
-    const fullMessage = selected ? `Caso seleccionado: ${selected.caso} (${selected.solicitudId}). ${message.trim()}` : message.trim();
+    const contextCase = needsConfirmation && pendingCase ? cases.find(item => item.caso === pendingCase) : selected;
+    const fullMessage = contextCase ? `Caso seleccionado: ${contextCase.caso} (${contextCase.solicitudId}). ${message.trim()}` : message.trim();
     sendMutation.mutate({ data: { sessionId, message: fullMessage } }, {
       onSuccess: response => {
         const now = new Date().toISOString();
@@ -225,7 +226,7 @@ function ChatPage() {
           {sendMutation.isPending && <div className="message"><div className="message-mark"><Bot size={14} /></div><div><div className="bubble" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><LoaderCircle size={14} className="spin" /> Revisando la solicitud…</div></div></div>}
           {sendMutation.isError && <div className="error-banner"><span>No se pudo enviar el mensaje. Revisa la conexión e inténtalo de nuevo.</span><button className="action-secondary" onClick={() => transmit(draft)} data-testid="button-retry-message">Reintentar</button></div>}
         </div>
-        {needsConfirmation && <div className="confirm-strip" role="status" data-testid="confirmation-required"><div className="confirm-copy"><strong>Confirmación necesaria</strong>El agente espera tu aprobación para el caso {pendingCase || selected?.caso || 'seleccionado'}.</div><button className="action-primary" onClick={() => transmit(`Confirmo explícitamente la creación de la orden para el caso ${pendingCase || selected?.caso}.`)} disabled={sendMutation.isPending} data-testid="button-confirm-order"><CheckCircle2 size={15} /> Confirmar creación</button></div>}
+        {needsConfirmation && <div className="confirm-strip" role="status" data-testid="confirmation-required"><div className="confirm-copy"><strong>Confirmación necesaria</strong>Revisa la orden y las excepciones del caso {pendingCase || 'pendiente'} antes de autorizar.</div><button className="action-primary" onClick={() => transmit(`Confirmo crear la orden ${pendingCase} y acepto las excepciones mostradas.`)} disabled={sendMutation.isPending || !pendingCase} data-testid="button-confirm-order"><CheckCircle2 size={15} /> Confirmar creación y excepciones</button></div>}
         <form className="chat-compose" onSubmit={e => { e.preventDefault(); transmit(draft); }}>
           <div className="compose-row"><textarea value={draft} onChange={e => setDraft(e.target.value)} placeholder="Escribe una instrucción o pregunta sobre el caso…" aria-label="Mensaje para el asistente" data-testid="input-chat-message" onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); transmit(draft); } }} />
             <button className="action-primary" type="submit" disabled={!draft.trim() || sendMutation.isPending} aria-label="Enviar mensaje" data-testid="button-send-message">{sendMutation.isPending ? <LoaderCircle size={15} className="spin" /> : <Send size={15} />}<span>Enviar</span></button></div>

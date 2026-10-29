@@ -31,28 +31,34 @@ El límite de iteraciones por turno es 25. Los límites de tokens son configurab
 
 ## 4. Modelo y costo estimado
 
-Se eligió `gemini-3.6-flash`, modelo estable con function calling y enfoque en ciclos agénticos. Se usa el SDK oficial `@google/genai`; la clave se obtiene solo de `GEMINI_API_KEY` en el backend. La elección evita depender de `gemini-2.5-flash`, que Google retiró en octubre de 2026.
+Se eligió `gemini-3.6-flash`, modelo estable con function calling y enfoque en ciclos agénticos. Se usa el SDK oficial `@google/genai`; la clave se obtiene solo de `GEMINI_API_KEY` en el backend. No se afirma que Gemini 2.5 Flash haya sido retirado: la tabla oficial consultada indica que no tiene fecha de apagado anunciada.
 
 Estimación de presupuesto por caso completo: **aprox. USD 0,02** suponiendo 10.000 tokens de entrada y 2.000 de salida entre todas las rondas de herramientas. La tarifa estándar publicada por Google para Gemini 3.6 Flash es USD 0,75 por millón de tokens de entrada y USD 3,75 por millón de salida hasta el 31 de diciembre de 2026; con ese supuesto el cálculo directo es USD 0,015. La tarifa puede cambiar desde enero de 2027, el nivel gratuito aplica condiciones distintas y el consumo real depende del número de rondas. Los conteos observados se guardan para recalcular el costo real.
 
-Fuentes oficiales consultadas el 29 de octubre de 2026: [modelo Gemini 3.6 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash) y [precios de Gemini API](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.6-flash).
+Fuentes oficiales verificadas el 29 de octubre de 2026: [modelo Gemini 3.6 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash), [SDK oficial y bibliotecas (`@google/genai`)](https://ai.google.dev/gemini-api/docs/libraries), [precios de Gemini API](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.6-flash) y [tabla de retiros](https://ai.google.dev/gemini-api/docs/deprecations).
 
 ## 5. Matriz de controles
 
 | Regla | Tratamiento |
 |---|---|
 | RC1 · Proveedor | Busca por NIT normalizado o nombre normalizado si no hay NIT; bloquea inexistente o inactivo. |
-| RC2 · Aprobación | Bloquea si falta, no contiene «Aprobado» o el remitente no está autorizado para el centro. |
+| RC2 · Aprobación | Exige que el texto comience con «Aprobado» y no contenga negaciones, preguntas, condiciones ni lenguaje de recepción/revisión; también exige remitente autorizado para el centro. Una aprobación ambigua no autoriza. |
 | RC3 · Tope | Bloquea si el total excede el tope del aprobador autorizado. |
 | RC4 · Centro/subárea | Bloquea centro inexistente o subárea no asignada. |
 | RC5 · Cotización | Pide confirmación si falta, la moneda difiere o el total excede 2 % de diferencia. |
-| RC6 · IVA | Deriva el indicador del proveedor y solicita confirmación si falta; bloquea un código desconocido. |
+| RC6 · IVA | Deriva el indicador del proveedor y solicita confirmación si falta; tanto el código informado como el derivado deben existir en el maestro de IVA autorizado. Un código desconocido bloquea, sin excepción humana. |
 | RC7 · Pago | Deriva del maestro si falta y lo informa; bloquea un código desconocido. |
 | RC8 · Retroactividad | Si la factura precede la solicitud, marca `retroactiva` y exige confirmación. |
 | RC9 · Aprobación previa | Exige confirmación cuando la aprobación antecede la solicitud. |
 | RC10 · Total | Bloquea si cantidad × precio unitario difiere del total por más de una unidad monetaria. |
 
 La parte más delicada fue separar bloqueos de confirmaciones y hacer que esa diferencia sobreviva a todos los caminos de creación. La herramienta `oc_crear` repite el control en el servidor, incluso si Gemini intenta llamarla directamente.
+
+**Criterio explícito de autorización:** se exige la frase completa «Confirmo crear la orden sol-XXX y acepto las excepciones mostradas.» con el caso pendiente correcto. No se aceptan «Sí», «OK», «Confirmo» aislado ni una confirmación de recepción. La herramienta compara además el payload canónico y las excepciones actuales con la propuesta pendiente: si cambiaron, rechaza la creación y solicita una nueva revisión. El botón de la interfaz envía esa misma frase para el caso pendiente.
+
+**Criterio conservador de RC2:** el cuerpo debe comenzar con «Aprobado», no contener preguntas ni términos de negación, condición, incertidumbre o simple recepción/revisión. Los casos ambiguos bloquean y deben aclararse con el aprobador; esta corrección no altera topes, importes ni tolerancias de RC1–RC10.
+
+**Integridad del SAP simulado:** solo `ENOENT` se interpreta como historial inexistente. Un error de lectura, JSON o esquema inválido, numeración insegura, referencia inconsistente o registro duplicado impide continuar. No se descartan líneas corruptas ni se asignan números sobre un historial parcialmente leído.
 
 ## 6. Diseño del adaptador SAP real
 

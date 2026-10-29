@@ -180,6 +180,51 @@ test("RC3 bloquea montos que exceden el tope del aprobador", async () =>
     assert.ok(result.bloqueos.some((item) => item.startsWith("RC3")));
   }));
 
+test("RC2 acepta aprobación positiva y bloquea negaciones o lenguaje ambiguo", async () =>
+  withIsolatedRoot(async (root) => {
+    const approval = await readCaseJson(root, "sol-001", "aprobacion.json");
+    assert.equal((await evaluateCase(root, "sol-001")).validacion.apta, true);
+    for (const body of [
+      "No aprobado. No autorizo esta compra.",
+      "Aprobado. No autorizo esta compra.",
+      "Aprobado si se ajusta el monto.",
+      "¿Aprobado?",
+      "Pendiente de aprobación.",
+      "Aprobado para revisión.",
+      "Aprobado probablemente.",
+      "Aprobado, depende de confirmar el presupuesto.",
+      "Confirmo recepción de la información.",
+    ]) {
+      await writeCaseJson(root, "sol-001", "aprobacion.json", { ...approval, cuerpo: body });
+      const validation = (await evaluateCase(root, "sol-001")).validacion;
+      assert.equal(validation.apta, false, body);
+      assert.ok(validation.bloqueos.some((block) => block.startsWith("RC2")));
+      const attempted = await executeAgentTool("oc_crear", { caso: "sol-001", confirmado: true },
+        { directory: root, sessionId: "test-approval", humanConfirmedCase: "sol-001" });
+      assert.equal(attempted.ok, false, body);
+    }
+  }));
+
+test("RC6 valida el IVA derivado y un humano no puede autorizar un código inexistente", async () =>
+  withIsolatedRoot(async (root) => {
+    const valid = await evaluateCase(root, "sol-006");
+    assert.equal(valid.validacion.derivados.indicador_iva, "C1");
+    assert.ok(valid.validacion.confirmaciones.some((item) => item.includes("RC6_IVA_DERIVADO")));
+    const path = join(root, "fixtures/reto-03/maestros/proveedores.json");
+    const providers = JSON.parse(await readFile(path, "utf8")) as Array<Record<string, unknown>>;
+    const provider = providers.find((item) => item.codigo_sap === valid.proveedor?.codigo_sap);
+    assert.ok(provider);
+    provider.indicador_iva_default = "ZZ_INEXISTENTE";
+    await writeFile(path, JSON.stringify(providers));
+    const invalid = (await evaluateCase(root, "sol-006")).validacion;
+    assert.equal(invalid.apta, false);
+    assert.ok(invalid.bloqueos.some((block) => block.startsWith("RC6")));
+    const attempted = await executeAgentTool("oc_crear", { caso: "sol-006", confirmado: true },
+      { directory: root, sessionId: "test-derived-iva", humanConfirmedCase: "sol-006" });
+    assert.equal(attempted.ok, false);
+    await assert.rejects(readFile(join(root, "out/sap/ordenes.jsonl")));
+  }));
+
 test("RC4 bloquea subáreas ajenas y RC7 deriva condiciones del proveedor", async () =>
   withIsolatedRoot(async (root) => {
     const request = await readCaseJson(root, "sol-001", "solicitud.json");

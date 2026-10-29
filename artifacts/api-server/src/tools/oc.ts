@@ -10,6 +10,7 @@ import { isDeepStrictEqual } from "node:util";
 import { join } from "node:path";
 import { z } from "zod";
 import { appendControlRecord, recordValidationAttempt } from "../lib/control";
+import { hasUnambiguousApproval } from "../lib/approval";
 import { caseDirectory, outputDirectory } from "../lib/workspace-paths";
 import { MockSapAdapter } from "../sap/mock";
 import {
@@ -45,6 +46,7 @@ export type ToolContext = {
   humanConfirmedCase?: string | null;
   allowAutomaticCreateCase?: string | null;
   allowedCase?: string | null;
+  expectedPayload?: OrdenCompra;
 };
 
 export type Tool<TArgs extends z.ZodObject<z.ZodRawShape>> = {
@@ -238,7 +240,7 @@ export async function loadCanonicalPackage(
     aprobacion: approval
       ? {
           ...approval,
-          aprobado: /\baprobado\b/i.test(approval.cuerpo),
+          aprobado: hasUnambiguousApproval(approval.cuerpo),
           texto: approval.cuerpo,
         }
       : null,
@@ -322,11 +324,11 @@ export async function evaluateCase(
   if (!paquete.aprobacion) {
     addUnique(bloqueos, "RC2: falta el correo de aprobación.");
   } else {
-    const approved = /\baprobado\b/i.test(paquete.aprobacion.cuerpo);
+    const approved = hasUnambiguousApproval(paquete.aprobacion.cuerpo);
     if (!approved) {
       addUnique(
         bloqueos,
-        "RC2: el correo de aprobación no contiene la palabra «Aprobado».",
+        "RC2: se requiere una aprobación afirmativa inequívoca: «Aprobado», sin negaciones, preguntas ni condiciones.",
       );
     }
 
@@ -405,7 +407,7 @@ export async function evaluateCase(
 
   const ivaCode = request.indicador_iva?.trim() || null;
   if (!ivaCode) {
-    if (proveedor) {
+    if (proveedor && masters.iva.some((item) => item.codigo === proveedor.indicador_iva_default)) {
       derivados.indicador_iva = proveedor.indicador_iva_default;
       addUnique(
         confirmaciones,
@@ -417,7 +419,7 @@ export async function evaluateCase(
     } else {
       addUnique(
         bloqueos,
-        "RC6: no se puede derivar el indicador de IVA sin un proveedor válido.",
+        "RC6: no se puede derivar un IVA válido: falta el proveedor o su indicador predeterminado no existe en el maestro autorizado.",
       );
     }
   } else if (!masters.iva.some((item) => item.codigo === ivaCode)) {
@@ -793,6 +795,11 @@ export const crear: Tool<typeof CreateArgs> = {
       }
 
       const build = await buildCanonicalPayload(ctx.directory, args.caso);
+      if (ctx.expectedPayload && !isDeepStrictEqual(ctx.expectedPayload, build.payload)) {
+        return failure(
+          "Los datos o las excepciones cambiaron desde la revisión. No se creó la orden. Cancela y vuelve a procesar el caso antes de confirmar.",
+        );
+      }
       if (!isDeepStrictEqual(args.payload, build.payload)) {
         return failure(
           "El payload recibido no coincide exactamente con el payload canónico generado desde los fixtures. No se creó la orden.",

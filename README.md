@@ -42,7 +42,9 @@ También puedes ejecutar la demo sin el servidor:
 bun run demo.ts
 ```
 
-La demo no llama a Gemini. Muestra sol-004 pendiente y simula después una confirmación humana explícita para comprobar el flujo completo; sol-005 y sol-006 quedan pendientes. Se detiene si `out/` ya existe para no sobrescribir resultados previos. En esa situación, conserva los archivos y mueve o archiva `out/` antes de iniciar otra demo.
+La demo no llama a Gemini. Muestra sol-004 pendiente y simula después una confirmación humana explícita para comprobar el flujo completo; sol-005 y sol-006 quedan pendientes. Se detiene si `out/` ya existe para no sobrescribir resultados previos. No borres ni muevas la salida operativa para probar: `pnpm run test:oc` incluye `tests/demo.test.ts`, que copia el código y los fixtures a un workspace temporal, ejecuta allí el comando real `pnpm run demo` sin clave y comprueba que una segunda ejecución rechaza la salida existente sin modificarla.
+
+En el chat, usa el botón **Confirmar creación y excepciones** o la frase completa que muestra el servidor: «Confirmo crear la orden sol-XXX y acepto las excepciones mostradas.». Las respuestas genéricas o de recepción no autorizan. Una revisión cuya propuesta o excepciones hayan cambiado debe cancelarse y procesarse otra vez.
 
 ## Variables
 

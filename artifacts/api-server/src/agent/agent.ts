@@ -476,19 +476,19 @@ function requestsHold(message: string): boolean {
   return /\bno\s+(?:la\s+)?(?:crees|crear|generes|registres)\b/.test(normalized);
 }
 
-function explicitlyConfirms(message: string): boolean {
+function explicitlyConfirms(message: string, caso: string): boolean {
   const messageWithoutCase = withoutSelectedCasePrefix(message);
   const normalized = messageWithoutCase
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
-    .trim();
-  if (/^(si|ok|dale|adelante|de acuerdo)[.! ]*$/.test(normalized)) return true;
-  const affirmative = normalized.replace(/^si[,\s]+/, "");
-  if (/[?¿]/.test(affirmative) || /\b(no|nunca|luego|despues|quizas|si|cuando|pero)\b/.test(affirmative)) {
-    return false;
-  }
-  return /^(confirmo|autorizo|apruebo)\b/.test(affirmative);
+    .trim()
+    .replace(/\.$/, "");
+  return normalized === confirmationCommand(caso).toLowerCase().replace(/\.$/, "");
+}
+
+function confirmationCommand(caso: string): string {
+  return `Confirmo crear la orden ${caso} y acepto las excepciones mostradas.`;
 }
 
 function explicitlyDeclines(message: string): boolean {
@@ -504,6 +504,7 @@ function summarizeValidation(
   packageData: Paquete,
   validation: Validacion,
   payload: OrdenCompra | null,
+  caso: string,
 ): string {
   const request = packageData.solicitud;
   const details = [
@@ -548,7 +549,7 @@ function summarizeValidation(
     ));
   }
 
-  details.push("", "La orden no se ha creado. ¿Confirmas explícitamente su creación? Responde «Confirmo» o «No».");
+  details.push("", `La orden no se ha creado. ¿Confirmas explícitamente su creación y las excepciones mostradas? Responde «${confirmationCommand(caso)}» o «No».`);
   return details.join("\n");
 }
 
@@ -716,7 +717,7 @@ async function completeCase(
     }
     session.pending = { caso, payload };
     return {
-      reply: summarizeValidation(packageData, validation, payload),
+      reply: summarizeValidation(packageData, validation, payload, caso),
       pendingCase: caso,
     };
   }
@@ -771,9 +772,9 @@ async function confirmPending(
   }
 
   const mentionedCase = caseFromText(message);
-  if (!explicitlyConfirms(message) || (mentionedCase && mentionedCase !== pending.caso)) {
+  if (!explicitlyConfirms(message, pending.caso) || (mentionedCase && mentionedCase !== pending.caso)) {
     const reply =
-      `No recibí una confirmación explícita válida para ${pending.caso}, así que no creé la orden. ¿Confirmas ${pending.caso}? Responde «Confirmo» o «No» para cancelar.`;
+      `No recibí una autorización explícita de creación para ${pending.caso}. No creé la orden. Responde «${confirmationCommand(pending.caso)}» o «No» para cancelar.`;
     session.messages.push(makeMessage("assistant", reply));
     session.contents.push({ role: "model", parts: [{ text: reply }] });
     return {
@@ -791,6 +792,7 @@ async function confirmPending(
     humanConfirmedCase: pending.caso,
     allowAutomaticCreateCase: null,
     allowedCase: pending.caso,
+    expectedPayload: pending.payload,
   };
   const run = await invokeTool(
     session,

@@ -192,56 +192,63 @@ function printCase(
   );
 }
 
-if (existsSync(out)) {
-  throw new Error(
-    "out/ ya existe. Conserva o mueve esos resultados antes de ejecutar la demo; no se sobrescribirán.",
+async function main(): Promise<void> {
+  if (existsSync(out)) {
+    throw new Error(
+      "out/ ya existe. Conserva o mueve esos resultados antes de ejecutar la demo; no se sobrescribirán.",
+    );
+  }
+
+  console.log(
+    "Demo determinística · SAP simulado · sin llamadas a Gemini · aprobación de sol-004 simulada explícitamente",
   );
-}
 
-console.log(
-  "Demo determinística · SAP simulado · sin llamadas a Gemini · aprobación de sol-004 simulada explícitamente",
-);
+  for (const caso of CASES) {
+    const result = await processCase(caso);
+    printCase(caso, result);
 
-for (const caso of CASES) {
-  const result = await processCase(caso);
-  printCase(caso, result);
-
-  if (
-    caso === "sol-004" &&
-    result.apta &&
-    result.confirmaciones.length > 0 &&
-    result.numeroOc === null
-  ) {
-    console.log(
-      "Confirmación explícita simulada en la demo: «Confirmo la creación de sol-004».",
-    );
-    const confirmed = await call(
-      "oc_crear",
-      { caso, confirmado: true },
-      { directory: root, sessionId, humanConfirmedCase: caso },
-    );
-    const numeroOc =
-      typeof confirmed.data?.numero_oc === "string"
-        ? confirmed.data.numero_oc
-        : null;
-    if (!confirmed.ok || !numeroOc) {
-      throw new Error(
-        confirmed.error ?? "No se creó sol-004 tras la confirmación explícita de demo.",
+    if (
+      caso === "sol-004" &&
+      result.apta &&
+      result.confirmaciones.length > 0 &&
+      result.numeroOc === null
+    ) {
+      console.log(
+        "Confirmación explícita simulada en la demo: «Confirmo la creación de sol-004».",
       );
+      const confirmed = await call(
+        "oc_crear",
+        { caso, confirmado: true },
+        { directory: root, sessionId, humanConfirmedCase: caso },
+      );
+      const numeroOc =
+        typeof confirmed.data?.numero_oc === "string"
+          ? confirmed.data.numero_oc
+          : null;
+      if (!confirmed.ok || !numeroOc) {
+        throw new Error(
+          confirmed.error ?? "No se creó sol-004 tras la confirmación explícita de demo.",
+        );
+      }
+      printCase(`${caso} (tras confirmación explícita)`, {
+        ...result,
+        numeroOc,
+        idempotente: confirmed.data?.idempotente === true,
+        motivo: null,
+      });
     }
-    printCase(`${caso} (tras confirmación explícita)`, {
-      ...result,
-      numeroOc,
-      idempotente: confirmed.data?.idempotente === true,
-      motivo: null,
-    });
-  }
 
-  if (caso === "sol-001" && result.numeroOc) {
-    const repeated = await processCase(caso);
-    printCase(`${caso} (reintento idempotente)`, repeated);
-    if (repeated.numeroOc !== result.numeroOc || !repeated.idempotente) {
-      throw new Error("La repetición de sol-001 no fue idempotente.");
+    if (caso === "sol-001" && result.numeroOc) {
+      const repeated = await processCase(caso);
+      printCase(`${caso} (reintento idempotente)`, repeated);
+      if (repeated.numeroOc !== result.numeroOc || !repeated.idempotente) {
+        throw new Error("La repetición de sol-001 no fue idempotente.");
+      }
     }
   }
 }
+
+void main().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : "La demo no pudo completarse.");
+  process.exitCode = 1;
+});
