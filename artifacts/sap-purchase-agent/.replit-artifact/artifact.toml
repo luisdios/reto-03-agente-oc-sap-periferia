@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Agente de órdenes SAP"
+description = "Aplicación conversacional en español para procesar paquetes de solicitudes de compra, validar maestros y controles de aprobación, preparar órdenes de compra y registrarlas de forma segura en un SAP simulado."
+version = "1.0.0"
+id = "artifacts/sap-purchase-agent"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22663
+
+[services.development]
+run = "pnpm --filter @workspace/sap-purchase-agent run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/sap-purchase-agent", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/sap-purchase-agent/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22663"
+BASE_PATH = "/"

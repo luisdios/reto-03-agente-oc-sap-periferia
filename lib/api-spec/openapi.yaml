@@ -10,6 +10,10 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: purchase-orders
+    description: Solicitudes, órdenes y control del proceso de compras
+  - name: agent
+    description: Conversación con el agente de órdenes de compra
 paths:
   /healthz:
     get:
@@ -24,13 +28,320 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /cases:
+    get:
+      operationId: listPurchaseCases
+      tags: [purchase-orders]
+      summary: Lista los casos de compra disponibles
+      responses:
+        "200":
+          description: Casos de los fixtures y su estado de procesamiento
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CasesResponse"
+  /dashboard:
+    get:
+      operationId: getPurchaseDashboard
+      tags: [purchase-orders]
+      summary: Resume el procesamiento y las órdenes recientes
+      responses:
+        "200":
+          description: Indicadores del proceso de compras
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardResponse"
+  /control:
+    get:
+      operationId: listControlEntries
+      tags: [purchase-orders]
+      summary: Consulta el registro de control
+      responses:
+        "200":
+          description: Intentos de procesamiento registrados
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ControlResponse"
+  /sap/orders:
+    get:
+      operationId: listPurchaseOrders
+      tags: [purchase-orders]
+      summary: Lista órdenes guardadas en SAP simulado
+      responses:
+        "200":
+          description: Órdenes de compra creadas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrdersResponse"
+  /sessions/{sessionId}:
+    get:
+      operationId: getAgentSession
+      tags: [agent]
+      summary: Recupera el historial de una sesión
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Historial completo de la sesión
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "404":
+          description: La sesión no existe
+  /chat:
+    post:
+      operationId: sendAgentMessage
+      tags: [agent]
+      summary: Envía un mensaje al agente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatInput"
+      responses:
+        "200":
+          description: Respuesta, herramientas ejecutadas y estado de confirmación
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+        "400":
+          description: El mensaje o la sesión no son válidos
 components:
   schemas:
     HealthStatus:
       type: object
       properties:
+        ok:
+          type: boolean
         status:
           type: string
+        provider:
+          type: string
+        model:
+          type: string
       required:
+        - ok
         - status
+        - provider
+        - model
+    CaseSummary:
+      type: object
+      properties:
+        caso:
+          type: string
+        solicitudId:
+          type: string
+        proveedor:
+          type: string
+        descripcion:
+          type: string
+        total:
+          type: number
+        moneda:
+          type: string
+        estado:
+          type: string
+          enum: [disponible, creada, bloqueada, confirmacion]
+        retroactiva:
+          type: boolean
+        bloqueos:
+          type: array
+          items:
+            type: string
+        confirmaciones:
+          type: array
+          items:
+            type: string
+      required:
+        - caso
+        - solicitudId
+        - proveedor
+        - descripcion
+        - total
+        - moneda
+        - estado
+        - retroactiva
+        - bloqueos
+        - confirmaciones
+    CasesResponse:
+      type: object
+      properties:
+        cases:
+          type: array
+          items:
+            $ref: "#/components/schemas/CaseSummary"
+      required: [cases]
+    ControlEntry:
+      type: object
+      properties:
+        solicitudId:
+          type: string
+        resultado:
+          type: string
+        numeroOc:
+          type: ["string", "null"]
+        retroactiva:
+          type: boolean
+        bloqueos:
+          type: array
+          items:
+            type: string
+        confirmaciones:
+          type: array
+          items:
+            type: string
+        ts:
+          type: string
+      required:
+        - solicitudId
+        - resultado
+        - numeroOc
+        - retroactiva
+        - bloqueos
+        - confirmaciones
+        - ts
+    ControlResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/ControlEntry"
+      required: [entries]
+    DashboardResponse:
+      type: object
+      properties:
+        totalCasos:
+          type: integer
+        ordenesCreadas:
+          type: integer
+        bloqueadas:
+          type: integer
+        pendientes:
+          type: integer
+        retroactivas:
+          type: integer
+        recientes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ControlEntry"
+      required:
+        - totalCasos
+        - ordenesCreadas
+        - bloqueadas
+        - pendientes
+        - retroactivas
+        - recientes
+    PurchaseOrderSummary:
+      type: object
+      properties:
+        numeroOc:
+          type: string
+        fecha:
+          type: string
+        solicitudId:
+          type: string
+        proveedor:
+          type: string
+        total:
+          type: number
+        moneda:
+          type: string
+        retroactiva:
+          type: boolean
+      required:
+        - numeroOc
+        - fecha
+        - solicitudId
+        - proveedor
+        - total
+        - moneda
+        - retroactiva
+    OrdersResponse:
+      type: object
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/PurchaseOrderSummary"
+      required: [orders]
+    ToolCall:
+      type: object
+      properties:
+        name:
+          type: string
+        args:
+          type: string
+        result:
+          type: string
+        ok:
+          type: boolean
+      required: [name, args, result, ok]
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        createdAt:
+          type: string
+        toolCalls:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolCall"
+      required: [id, role, content, createdAt, toolCalls]
+    SessionResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        pendingCase:
+          type: ["string", "null"]
+        needsConfirmation:
+          type: boolean
+      required: [sessionId, messages, pendingCase, needsConfirmation]
+    ChatInput:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          minLength: 1
+        message:
+          type: string
+          minLength: 1
+      required: [sessionId, message]
+    ChatResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        reply:
+          type: string
+        toolCalls:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolCall"
+        needsConfirmation:
+          type: boolean
+        pendingCase:
+          type: ["string", "null"]
+      required: [sessionId, reply, toolCalls, needsConfirmation, pendingCase]
 

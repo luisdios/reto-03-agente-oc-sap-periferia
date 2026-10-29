@@ -53,3 +53,9 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Runtime data and local secrets
+/out/
+.env
+.env.*
+!.env.example

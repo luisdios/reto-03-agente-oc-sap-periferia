@@ -1,15 +1,15 @@
-# [Project name]
+# Agente de órdenes SAP
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Prototipo conversacional en español para validar solicitudes de compra y crear órdenes en un SAP simulado.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `pnpm dev` — start the web app and API server together locally.
+- `pnpm run typecheck` — typecheck workspace libraries and artifacts.
+- `pnpm run test:oc` — run deterministic tests against copied fixtures.
+- `pnpm run demo` or `bun run demo.ts` — run the six-case demo without Gemini; clears `out/` first.
+- Required secret: `GEMINI_API_KEY` — configure in Replit Secrets or export it locally.
+- Optional env: `GEMINI_MODEL`, `AGENT_MAX_ITERATIONS`, `AGENT_MAX_SESSION_TOKENS`, `AGENT_MAX_PROCESS_TOKENS_PER_DAY`, `API_SERVER_PORT`, `WEB_PORT`.
 
 ## Stack
 
@@ -22,24 +22,37 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/sap-purchase-agent/` — React/Vite interface.
+- `artifacts/api-server/src/` — Express routes, Gemini agent cycle, Zod tools, SAP adapter.
+- `agent/prompt.md` — system prompt.
+- `artifacts/api-server/src/knowledge/` — process rules.
+- `fixtures/reto-03/` — read-only source documents and master data.
+- `out/` — generated evidence, trace, simulated orders, control and usage logs.
+- `lib/api-spec/openapi.yaml` — source of API contracts; regenerate with `pnpm --filter @workspace/api-spec run codegen`.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The LLM never supplies trusted order values: each tool reloads fixtures and the server rebuilds the canonical payload.
+- A confirmation is held in server-side session state and checked again by `oc_crear`.
+- No database or real SAP connection is used; writes are local files under `out/`.
+- `out/` and local environment files are ignored and excluded from deployment.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Review six purchase cases, inspect validation calls, resolve blocks, confirm exceptions and inspect saved simulated orders.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Preserve every fixture amount and date; never infer or silently correct source data.
+- Do not expose `GEMINI_API_KEY` in code, browser requests, logs or responses.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- `demo.ts` deletes and recreates `out/`; keep any needed generated evidence before running it.
+- The web dev server proxies `/api` to the local API port; the API listens on `API_SERVER_PORT` (default `8080`).
+- Sessions are in memory and reset when the API server restarts.
 
 ## Pointers
 
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- `README.md` — setup and commands.
+- `SOLUCION.md` — design, cost estimate, coverage and production gaps.
