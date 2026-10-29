@@ -95,7 +95,7 @@ En este conjunto de prueba solo una de seis solicitudes tiene una factura fechad
 | HU-5 · SAP simulado | Hecho | Implementar, probar y autorizar el adaptador SAP real. |
 | HU-6 · Errores | Hecho para errores de herramienta/modelo y JSON de entrada | Probar formatos, límites, logs y reconciliación de errores parciales. |
 | Chat, confirmaciones y log | Hecho | Autenticación, persistencia y retención de sesiones. |
-| Demo sin modelo | Hecho | No aplica. |
+| Demo sin modelo | Verificada en salida limpia, sin clave; incluye confirmación explícita simulada de sol-004 | Desviación de seguridad: no borra un `out/` existente. Para repetir, archivar la salida o usar copias temporales de fixtures. |
 | Módulo reutilizable bonus | No hecho | Empaquetar prompt, conocimiento y herramientas como módulo independiente. |
 | URL pública | Parcial | Publicar el artefacto; por ahora se prueba desde la vista previa de Replit. |
 

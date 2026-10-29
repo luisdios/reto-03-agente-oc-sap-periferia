@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Auditoría del PRD — Agente de órdenes SAP</title>
+<style>
+body{font:15px/1.55 system-ui,sans-serif;max-width:1200px;margin:36px auto;padding:0 24px;color:#20313d;background:#fafaf7}h1,h2{line-height:1.2}h1{font-size:30px}h2{margin-top:32px;font-size:22px}table{border-collapse:collapse;width:100%;font-size:14px;background:white}th,td{border:1px solid #d8dfdd;padding:10px;text-align:left;vertical-align:top}th{background:#e6efea}code{font-size:12px;overflow-wrap:anywhere}.note{background:#edf3ef;border-left:4px solid #628b77;padding:16px}.warn{background:#fff4d9;border-left:4px solid #b18a31;padding:16px}li{margin:5px 0}@media print{body{max-width:none;margin:0;font-size:11px}table{font-size:10px}th,td{padding:5px}h2{break-after:avoid}tr{break-inside:avoid}}
+</style>
+<h1>Auditoría contra el PRD original</h1>
+<p>Agente de órdenes SAP · 29 de octubre de 2026</p>
+<div class="note"><strong>Resultado comprobado:</strong> 14/14 pruebas de reglas/API y 1/1 prueba de renderizado aprobadas; compilación global aprobada; dos demos con salida idéntica sin GEMINI_API_KEY. No se declara cumplimiento total del PRD: las desviaciones y verificaciones pendientes se detallan abajo.</div>
+<h2>1. Alcance y evidencia reproducible</h2>
+<ul>
+<li>Fuentes: <code>attached_assets/PRD_1793297081381.md</code>, instrucciones adjuntas y ZIP original de datos.</li>
+<li>Reglas/API: <code>pnpm --filter @workspace/api-server run test</code>. El script elimina GEMINI_API_KEY del entorno antes de ejecutar <code>tests/oc.test.ts</code> y <code>tests/agent.test.ts</code>.</li>
+<li>Tabla UI: <code>pnpm --filter @workspace/api-server exec tsx --tsconfig ../sap-purchase-agent/tests/tsconfig.json --test ../sap-purchase-agent/tests/message-content.test.ts</code>.</li>
+<li>Compilación: <code>pnpm run build</code>, que incluye typecheck y compilación de API, web y sandbox. Finalizó con código 0; quedó un aviso no bloqueante de sourcemap en tooltip.tsx.</li>
+<li>Demo: dos ejecuciones <code>env -u GEMINI_API_KEY bun run /ruta/al/proyecto/demo.ts</code> desde directorios temporales independientes con copias de fixtures. <code>diff</code> de stdout sin diferencias.</li>
+<li>Capturas temporales de la ejecución: <code>/tmp/prd-audit-tests-final.log</code>, <code>/tmp/prd-audit-build-final.log</code>, <code>/tmp/sap-demo-a-iJ8tGd/</code> y <code>/tmp/sap-demo-b-v9IGK9/</code>. Son temporales, no entregables persistentes.</li>
+</ul>
+<h2>2. Las seis solicitudes</h2>
+<table><tr><th>Solicitud</th><th>Resultado de la prueba</th><th>Evidencia</th></tr>
+<tr><td>sol-001</td><td>Crea 4500000001; el reintento devuelve 4500000001 con idempotente=true.</td><td>Demo: una sola fila de orden para SOL-2026-001; pruebas de idempotencia y API.</td></tr>
+<tr><td>sol-002</td><td>Bloqueada por proveedor inexistente; una confirmación humana no supera el bloqueo.</td><td>RC1; pruebas de reglas, herramienta y chat HTTP; sin orden persistida.</td></tr>
+<tr><td>sol-003</td><td>Bloqueada por aprobador no autorizado.</td><td>RC2; demo y prueba HTTP, también tras un mensaje «Confirmo».</td></tr>
+<tr><td>sol-004</td><td>Pendiente antes de confirmar. Solicitud 25.000.000 COP; cotización 26.500.000 COP; diferencia 6 %. Solo la confirmación explícita simulada permite 4500000002 en la demo aislada.</td><td>RC5; control de demo con pendiente → creada; HTTP rechaza preguntas, confirmación condicional y confirmación de otro caso.</td></tr>
+<tr><td>sol-005</td><td>Retroactiva, pendiente sin confirmar. La API aislada permite crear después de confirmación explícita.</td><td>RC8; retroactiva=true en CSV y payload; cancelación y confirmación probadas.</td></tr>
+<tr><td>sol-006</td><td>Propone C1, IVA 19 %, pendiente. La API aislada permite crear después de confirmación explícita.</td><td>RC6; demo, prueba de cancelación y confirmación HTTP.</td></tr></table>
+<h2>3. Reglas RC1–RC10</h2>
+<table><tr><th>Regla</th><th>Resultado</th><th>Evidencia de la prueba</th></tr>
+<tr><td>RC1 · proveedor</td><td>Aprobada</td><td>sol-002 bloqueada; no crea ni con contexto humano confirmado.</td></tr>
+<tr><td>RC2 · aprobador</td><td>Aprobada</td><td>sol-003 bloqueada; aprobación ausente normalizada a null.</td></tr>
+<tr><td>RC3 · tope autorizado</td><td>Aprobada</td><td>Variante temporal de fixture sobre el tope: bloqueo.</td></tr>
+<tr><td>RC4 · centro/subárea</td><td>Aprobada</td><td>Variante temporal con subárea ajena: bloqueo.</td></tr>
+<tr><td>RC5 · cotización</td><td>Aprobada</td><td>sol-004, diferencia 6 %: confirmación; cotización ausente: confirmación.</td></tr>
+<tr><td>RC6 · IVA</td><td>Aprobada</td><td>sol-006: derivación con confirmación; código inexistente: bloqueo.</td></tr>
+<tr><td>RC7 · condiciones de pago</td><td>Aprobada</td><td>Condición ausente: deriva Z030 del proveedor.</td></tr>
+<tr><td>RC8 · retroactividad</td><td>Aprobada</td><td>sol-005: factura anterior, confirmación y registro retroactiva=true.</td></tr>
+<tr><td>RC9 · fecha de aprobación</td><td>Aprobada</td><td>Variante temporal con aprobación anterior: confirmación.</td></tr>
+<tr><td>RC10 · aritmética</td><td>Aprobada</td><td>Total distinto de cantidad por precio: bloqueo.</td></tr></table>
+<p>Las variantes necesarias para activar reglas no presentes como error en los seis casos originales se hicieron solo sobre copias temporales. No se afirma cobertura exhaustiva de todas las combinaciones o valores límite.</p>
+<h2>4. Matriz funcional y de entrega</h2>
+<table><tr><th>Requisito</th><th>Resultado de la prueba</th><th>Evidencia y alcance</th></tr>
+<tr><td>Fixtures originales sin modificaciones</td><td>Verificado</td><td>29 archivos comparados byte a byte contra el ZIP original; cero diferencias.</td></tr>
+<tr><td>HU1 · paquete normalizado</td><td>Verificado</td><td>Prueba de lectura, aprobado/texto en aprobación; adjunto ausente = null y faltantes no vacío. Se conserva un alias paquete por compatibilidad.</td></tr>
+<tr><td>HU2 · validaciones, derivaciones y confirmaciones</td><td>Verificado para escenarios ejecutados</td><td>Diez reglas activadas explícitamente, según tabla anterior.</td></tr>
+<tr><td>HU3 · payload Zod y trazabilidad</td><td>Verificado</td><td>Payloads generados/validados; cuatro trazabilidad.json revisados. Cada hoja escalar tiene fuente, con excepciones documentadas como conjunto.</td></tr>
+<tr><td>No inventar importes/proveedores desde el modelo</td><td>Verificado para el camino de creación probado</td><td>Se suministró un payload falso; la orden conservó 11.400.000 COP, NIT 900555111 y precio unitario 95.000 desde fuentes canónicas. No se hizo una campaña exhaustiva de prompts adversariales.</td></tr>
+<tr><td>HU4 · evidencia TXT y SHA256</td><td>Verificado P0</td><td>Cuatro aprobacion.txt; hashes recalculados iguales a aprobador.evidencia_sha256. Formato de encabezados y cuerpo revisado en implementación.</td></tr>
+<tr><td>HU5 · secuencia e idempotencia</td><td>Verificado en ejecución secuencial</td><td>Demo limpia: 4500000001 y 4500000002; sol-001 repetida sin duplicación. Concurrencia de creación entre procesos no probada.</td></tr>
+<tr><td>HU5 · out/control.csv</td><td>Verificado</td><td>Demo aislada: ocho filas de datos, pendiente/creada/bloqueada, retroactiva y número OC. Prueba de inicialización concurrente y encabezado único.</td></tr>
+<tr><td>HU6 · datos incompletos o inválidos</td><td>Verificado en casos ejecutados</td><td>Adjunto ausente, JSON inválido, valor no numérico y ruta no permitida: error JSON controlado, sin excepción al llamador.</td></tr>
+<tr><td>Fallo al guardar en SAP simulado</td><td>Verificado</td><td>Ruta de almacenamiento inutilizable: devuelve ok=false, no simula éxito.</td></tr>
+<tr><td>Confirmaciones humanas, CA3</td><td>Verificado por HTTP</td><td>Pregunta final explícita; no crea ante pregunta, frase condicional, confirmación de otro caso o cancelación; sí tras confirmación válida. Bloqueos no son anulables.</td></tr>
+<tr><td>Trazas de herramientas, CA4</td><td>Verificado por HTTP</td><td>Los eventos de herramienta del historial persistido en la sesión coinciden con out/log.jsonl, incluida la creación tras confirmar.</td></tr>
+<tr><td>UI: historial, envío, espera, herramientas y botones</td><td>Verificación mixta</td><td>Compilación y captura de /chat sin errores; flujo y recuperación de historial probados por HTTP; tabla y escape HTML probados por renderizado React. No se hizo una prueba automatizada de clics en navegador.</td></tr>
+<tr><td>OC en tabla, valores comparados y pregunta final</td><td>Verificado en API y renderizador</td><td>HTTP de sol-004 contiene tabla, ambos importes y pregunta; prueba UI genera tabla y escapa contenido HTML.</td></tr>
+<tr><td>Contrato de herramientas y descripción de argumentos</td><td>Inspección estática y pruebas de error</td><td>description, Zod con describe y execute que devuelve JSON; errores probados sin propagación al llamador.</td></tr>
+<tr><td>Prompt externo, knowledge separado, adaptador SAP intercambiable</td><td>Inspección estática</td><td>Archivos separados e interfaz del adaptador en backend. Equivalente dentro del monorepo; no replica literalmente src/ en la raíz.</td></tr>
+<tr><td>CA1 · máximo 25 iteraciones, tokens y timeout</td><td>No verificado por agotamiento</td><td>Controles encontrados en código. No se forzó un modelo a agotar todos los límites; no se declara aprobación dinámica de este criterio.</td></tr>
+<tr><td>Gemini real desde servidor</td><td>Verificado en una consulta no creadora</td><td>POST /api/chat: «Conexión verificada.», toolCalls=[], needsConfirmation=false. Esto no garantiza disponibilidad futura del proveedor.</td></tr>
+<tr><td>Demo sin modelo/clave</td><td>Verificado</td><td>Dos ejecuciones con env -u GEMINI_API_KEY; stdout idéntico; sol-001 repetida y confirmación explícita simulada de sol-004.</td></tr>
+<tr><td>Demo limpia out/ al inicio</td><td>Desviación conservada por seguridad</td><td>La demo rechaza un out/ existente para no borrar datos del usuario. Para repetición se usaron directorios temporales. No cumple literalmente el borrado automático del PRD.</td></tr>
+<tr><td>Compila sin errores TypeScript</td><td>Verificado</td><td>pnpm run build con salida 0; typecheck adicional del frontend después de añadir su prueba.</td></tr>
+<tr><td>Sin explicit any ni shell en herramientas</td><td>Inspección estática</td><td>Búsqueda de : any, as any y &lt;any&gt; sin hallazgos en código de producto/demo/tests; herramientas usan filesystem y adaptador, no shell.</td></tr>
+<tr><td>Arranque de entorno y configuración</td><td>Parcialmente verificado</td><td>Servicios reiniciados correctamente y /chat accesible. Script de un comando inspeccionado. No se instaló en máquina limpia ni se cronometró el objetivo de menos de dos minutos.</td></tr>
+<tr><td>README y SOLUCION</td><td>Inspección estática</td><td>README con arranque, variables y demo; SOLUCION contiene sus 12 secciones. La URL publicada estable sigue pendiente.</td></tr>
+<tr><td>URL pública estable de entrega</td><td>No completado</td><td>Solo se verificó la vista de desarrollo; no se publicó la aplicación durante esta auditoría.</td></tr>
+<tr><td>SAP real</td><td>Conforme al alcance de diseño</td><td>SOLUCION documenta el adaptador real; no hay conexión real. El PRD pide diseño, no implementación.</td></tr>
+<tr><td>PDF y Excel binarios</td><td>No implementados; P1 opcional</td><td>No se declaran como requisitos P0 completados.</td></tr>
+<tr><td>modulo/ reutilizable</td><td>No implementado; bonus opcional</td><td>No se declara como entregable completado.</td></tr>
+</table>
+<h2>5. Seguridad de la clave</h2>
+<table><tr><th>Control</th><th>Resultado</th><th>Evidencia / límite</th></tr>
+<tr><td>Frontend: fuentes y bundle</td><td>Sin hallazgos</td><td>No aparece GEMINI_API_KEY ni un valor con formato de clave Google en src/ o dist/ del frontend.</td></tr>
+<tr><td>Repositorio actual e historial Git</td><td>Sin hallazgos</td><td>Búsqueda de patrones AIza… en archivos rastreados e historial de todas las referencias. Solo se imprimieron rutas/identificadores, nunca valores.</td></tr>
+<tr><td>Logs y salidas</td><td>Sin hallazgos</td><td>Patrones de clave Google ausentes en out/log.jsonl y archivos de logs disponibles en /tmp/logs al cierre.</td></tr>
+<tr><td>Secretos y entregables</td><td>Verificado</td><td>No se leyó el valor del secreto. .env.example tiene placeholder vacío. out/, node_modules/ y .env están ignorados y no rastreados.</td></tr></table>
+<p>Estos resultados corresponden a los archivos y logs inspeccionados durante la auditoría. Son una búsqueda de patrones de credencial, no una garantía sobre formatos desconocidos, claves codificadas o sistemas de logs externos no accesibles.</p>
+<h2>6. Correcciones realizadas</h2>
+<ul>
+<li>Confirmación humana anclada a una afirmación, rechaza condiciones/preguntas y exige que el caso mencionado coincida con el pendiente.</li>
+<li>Creación posterior a confirmación incluida en el historial de herramientas, no solo en la respuesta inmediata.</li>
+<li>Registro pendiente cuando un usuario retiene un caso limpio.</li>
+<li>Propuesta de OC en tabla con pregunta final explícita y renderizado sin interpretar HTML.</li>
+<li>Normalización de aprobado/texto y compatibilidad de salida directa del paquete.</li>
+<li>Demo con confirmación explícita simulada de sol-004 y pruebas sin clave.</li>
+<li>Inicialización atómica del encabezado CSV; prueba de concurrencia y tolerancia a encabezados repetidos.</li>
+<li>Compilación de Vite sin exigir variables de servidor durante build; validación de variables mantenida en desarrollo.</li>
+<li>Suite ampliada para las diez reglas, errores de entrada, fallo del adaptador, valores no confiables y flujos HTTP.</li>
+</ul>
+<div class="warn"><strong>Conservación de datos:</strong> el out/ actual mantiene ocho registros de control, un único encabezado y una única orden previa de sol-001. Sol-004 sigue sin orden en ese entorno. Las confirmaciones y creaciones de esta auditoría se hicieron en salidas temporales. El reinicio del servidor eliminó sesiones en memoria; para confirmar una solicitud ahora hay que volver a procesarla.</div>
+</html>

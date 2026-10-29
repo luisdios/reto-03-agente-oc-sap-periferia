@@ -64,6 +64,15 @@ after(async () => {
 });
 
 test("RC1–RC10 producen el resultado esperado en los seis fixtures", async () => {
+  const normalized = await executeAgentTool(
+    "oc_leer_paquete",
+    { caso: "sol-001" },
+    { directory: testRoot, sessionId: "test-normalized" },
+  );
+  const normalizedData = JSON.parse(normalized.result).data;
+  assert.equal(normalizedData.aprobacion.aprobado, true);
+  assert.equal(typeof normalizedData.aprobacion.texto, "string");
+  assert.equal(normalizedData.solicitud.solicitud_id, "SOL-2026-001");
   const results = new Map(
     await Promise.all(
       ["sol-001", "sol-002", "sol-003", "sol-004", "sol-005", "sol-006"].map(
@@ -146,7 +155,7 @@ test("sol-004 no se crea hasta que el servidor recibe confirmación humana", asy
 
   const denied = await executeAgentTool(
     "oc_crear",
-    { caso: "sol-004" },
+    { caso: "sol-004", confirmado: true },
     { ...context, allowAutomaticCreateCase: "sol-004" },
   );
   assert.equal(denied.ok, false);
@@ -267,4 +276,65 @@ test("el CSV de control conserva un solo encabezado y omite encabezados repetido
       records.map((item) => item.solicitudId).sort(),
       ["SOL-TEST", "SOL-TEST-2"],
     );
+  }));
+
+test("HU1/HU6: adjuntos ausentes, JSON inválido, monto no numérico y ruta no permitida", async () =>
+  withIsolatedRoot(async (root) => {
+    const folder = join(root, "fixtures/reto-03/solicitudes/sol-001");
+    const context = { directory: root, sessionId: "test-errors" };
+    await rm(join(folder, "aprobacion.json"));
+    const missing = await executeAgentTool("oc_leer_paquete", { caso: "sol-001" }, context);
+    assert.equal(missing.ok, true);
+    assert.equal(JSON.parse(missing.result).data.paquete.aprobacion, null);
+    assert.ok(JSON.parse(missing.result).data.faltantes.length > 0);
+
+    await writeFile(join(folder, "solicitud.json"), "{malformed", "utf8");
+    const malformed = await executeAgentTool("oc_leer_paquete", { caso: "sol-001" }, context);
+    assert.equal(malformed.ok, false);
+    assert.equal(typeof JSON.parse(malformed.result).error, "string");
+
+    const original = await readCaseJson(workspaceRoot(), "sol-001", "solicitud.json");
+    original.valor_total = "no es numérico";
+    await writeCaseJson(root, "sol-001", "solicitud.json", original);
+    assert.equal((await executeAgentTool("oc_validar", { caso: "sol-001" }, context)).ok, false);
+    assert.equal((await executeAgentTool("oc_leer_paquete", { caso: "../../etc" }, context)).ok, false);
+  }));
+
+test("no se informa éxito cuando el adaptador no puede guardar", async () =>
+  withIsolatedRoot(async (root) => {
+    const context = {
+      directory: root,
+      sessionId: "test-save-failure",
+      allowAutomaticCreateCase: "sol-001",
+    };
+    await executeAgentTool("oc_generar_evidencia", { caso: "sol-001" }, context);
+    await writeFile(join(root, "out/sap"), "Esta ruta no es un directorio", "utf8");
+    const result = await executeAgentTool("oc_crear", { caso: "sol-001" }, context);
+    assert.equal(result.ok, false);
+    assert.equal(JSON.parse(result.result).data, undefined);
+  }));
+
+test("los valores enviados por el modelo no alteran el payload y una confirmación no supera bloqueos", async () =>
+  withIsolatedRoot(async (root) => {
+    const context = { directory: root, sessionId: "test-untrusted", allowAutomaticCreateCase: "sol-001" };
+    await executeAgentTool("oc_generar_evidencia", { caso: "sol-001" }, context);
+    const result = await executeAgentTool(
+      "oc_crear",
+      { caso: "sol-001", payload: { moneda: "USD", total: 1, proveedor: "inventado" } },
+      context,
+    );
+    assert.equal(result.ok, true, result.result);
+    const saved = JSON.parse((await readFile(join(root, "out/sap/ordenes.jsonl"), "utf8")).trim());
+    assert.equal(saved.total, 11_400_000);
+    assert.equal(saved.orden.moneda, "COP");
+    assert.equal(saved.orden.proveedor.nit, "900555111");
+    assert.equal(saved.orden.posiciones[0].precio_unitario, 95_000);
+
+    const blocked = await executeAgentTool(
+      "oc_crear",
+      { caso: "sol-002", confirmado: true },
+      { directory: root, sessionId: "test-blocked-confirmed", humanConfirmedCase: "sol-002" },
+    );
+    assert.equal(blocked.ok, false);
+    assert.equal((await readFile(join(root, "out/sap/ordenes.jsonl"), "utf8")).trim().split("\n").length, 1);
   }));

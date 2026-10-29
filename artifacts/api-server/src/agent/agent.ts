@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { Type, type Content, type FunctionDeclaration } from "@google/genai";
 import { logger } from "../lib/logger";
+import { appendControlRecord } from "../lib/control";
 import { outputDirectory, workspaceRoot } from "../lib/workspace-paths";
 import {
   executeAgentTool,
@@ -482,12 +483,12 @@ function explicitlyConfirms(message: string): boolean {
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
     .trim();
-  if (/^(no|no confirmo|cancelo|cancelar|rechazo)\b/.test(normalized)) return false;
-  return /\b(confirmo|confirmar|autorizo|apruebo|de acuerdo|adelante|proceder)\b/.test(
-    normalized,
-  ) || /^(si|sí|ok|dale)[.! ]*$/.test(
-    messageWithoutCase.trim().toLowerCase(),
-  );
+  if (/^(si|ok|dale|adelante|de acuerdo)[.! ]*$/.test(normalized)) return true;
+  const affirmative = normalized.replace(/^si[,\s]+/, "");
+  if (/[?¿]/.test(affirmative) || /\b(no|nunca|luego|despues|quizas|si|cuando|pero)\b/.test(affirmative)) {
+    return false;
+  }
+  return /^(confirmo|autorizo|apruebo)\b/.test(affirmative);
 }
 
 function explicitlyDeclines(message: string): boolean {
@@ -525,9 +526,29 @@ function summarizeValidation(
   }
 
   if (payload) {
-    details.push(`Payload SAP: ${payload.posiciones[0].descripcion}.`);
+    const item = payload.posiciones[0];
+    const rows = [
+      ["Solicitud", payload.referencia.solicitud_id],
+      ["Sociedad / organización", `${payload.sociedad} / ${payload.organizacion_compras}`],
+      ["Proveedor", `${payload.proveedor.codigo_sap} · ${payload.proveedor.nombre}`],
+      ["NIT", payload.proveedor.nit],
+      ["Moneda / pago", `${payload.moneda} / ${payload.condiciones_pago}`],
+      ["Aprobador / fecha", `${payload.aprobador.email} / ${payload.aprobador.fecha_aprobacion}`],
+      ["Posición / descripción", `${item.numero} · ${item.descripcion}`],
+      ["Cantidad / unidad", `${item.cantidad} / ${item.unidad}`],
+      ["Precio unitario", `${item.precio_unitario} ${payload.moneda}`],
+      ["Centro / subárea", `${item.centro_costo} / ${item.subarea}`],
+      ["Indicador IVA", item.indicador_iva],
+      ["Total de solicitud", `${request.valor_total} ${payload.moneda}`],
+      ["SHA-256 de aprobación", payload.aprobador.evidencia_sha256],
+    ];
+    details.push("", "| Campo SAP | Valor propuesto |", "| --- | --- |");
+    details.push(...rows.map(([label, value]) =>
+      `| ${label} | ${value.replaceAll("|", "/")} |`,
+    ));
   }
 
+  details.push("", "La orden no se ha creado. ¿Confirmas explícitamente su creación? Responde «Confirmo» o «No».");
   return details.join("\n");
 }
 
@@ -682,6 +703,17 @@ async function completeCase(
       };
     }
 
+    if (validation.confirmaciones.length === 0) {
+      await appendControlRecord(root, {
+        solicitudId: packageData.solicitud.solicitud_id,
+        resultado: "pendiente",
+        numeroOc: null,
+        retroactiva: validation.retroactiva,
+        bloqueos: [],
+        confirmaciones: ["La analista pidió revisar antes de crear."],
+        ts: new Date().toISOString(),
+      });
+    }
     session.pending = { caso, payload };
     return {
       reply: summarizeValidation(packageData, validation, payload),
@@ -738,9 +770,10 @@ async function confirmPending(
     };
   }
 
-  if (!explicitlyConfirms(message)) {
+  const mentionedCase = caseFromText(message);
+  if (!explicitlyConfirms(message) || (mentionedCase && mentionedCase !== pending.caso)) {
     const reply =
-      "Todavía no recibí una confirmación explícita, así que no creé la orden. Responde «Confirmo» para continuar o «No» para cancelar.";
+      `No recibí una confirmación explícita válida para ${pending.caso}, así que no creé la orden. ¿Confirmas ${pending.caso}? Responde «Confirmo» o «No» para cancelar.`;
     session.messages.push(makeMessage("assistant", reply));
     session.contents.push({ role: "model", parts: [{ text: reply }] });
     return {
@@ -771,7 +804,7 @@ async function confirmPending(
   if (run.envelope.ok) {
     session.pending = null;
   }
-  session.messages.push(makeMessage("assistant", reply));
+  session.messages.push(makeMessage("assistant", reply, [run.view]));
   session.contents.push({ role: "model", parts: [{ text: reply }] });
 
   return {

@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "N09d2WR3_1dWPrE-X050N"
+uri = "file://reports/auditoria-prd.html"
+type = "html"
+title = "Auditoría del PRD: resultados y evidencia"
+description = "Matriz punto por punto, seis solicitudes, RC1–RC10, pruebas ejecutadas, correcciones y requisitos no verificados."
+logical_id = "8aa23f30-4523-45ba-8517-b41174f01573"
+content_hash = "sha256:86156f18ad82b29d1214f99adc83fba62ed8c2ac1868a097d2b715fb7db80172"
+size = 14404
+mtime_ms = 1793301356195
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:797d6116-e478-43e2-b876-372b3437d153/8aa23f30-4523-45ba-8517-b41174f01573/ac9e03ef-cae0-44a6-aa44-bcced330f699"
+storage_version_token = "1793301400852675"
+content_type = "text/html"

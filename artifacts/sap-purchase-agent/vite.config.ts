@@ -1,11 +1,12 @@
 import path from 'path';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, type UserConfig } from 'vite';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
-const rawPort = process.env.PORT;
+export default defineConfig(async ({ command }): Promise<UserConfig> => {
+const rawPort = process.env.PORT ?? (command === 'build' ? '22663' : undefined);
 
 if (!rawPort) {
   throw new Error(
@@ -19,7 +20,7 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const basePath = process.env.BASE_PATH;
+const basePath = process.env.BASE_PATH ?? (command === 'build' ? '/' : undefined);
 
 if (!basePath) {
   throw new Error(
@@ -27,7 +28,7 @@ if (!basePath) {
   );
 }
 
-export default defineConfig({
+return {
   base: basePath,
   plugins: [
     react(),
@@ -84,4 +85,5 @@ export default defineConfig({
     host: '0.0.0.0',
     allowedHosts: true,
   },
+};
 });

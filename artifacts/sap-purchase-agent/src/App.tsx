@@ -18,6 +18,7 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
+import { MessageContent } from '@/components/chat/MessageContent';
 
 const queryClient = new QueryClient();
 
@@ -239,7 +240,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
   return <article className={`message ${isUser ? 'user' : ''}`} data-testid={`message-${message.id}`}>
     <div className="message-mark">{isUser ? <ArrowDownLeft size={14} /> : <Bot size={15} />}</div>
-    <div style={{ minWidth: 0 }}><div className="bubble">{message.content}
+    <div style={{ minWidth: 0 }}><div className="bubble">{isUser ? message.content : <MessageContent content={message.content} />}
       {!isUser && message.toolCalls?.length > 0 && <div>{message.toolCalls.map((tool, i) => <ToolCard key={`${tool.name}-${i}`} tool={tool} />)}</div>}
     </div><div className="message-time">{formatDate(message.createdAt)}{!isUser && message.toolCalls?.length ? ` · ${message.toolCalls.length} herramienta(s)` : ''}</div></div>
   </article>;

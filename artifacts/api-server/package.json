@@ -9,7 +9,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "demo": "tsx ../../demo.ts",
-    "test": "tsx --test ../../tests/oc.test.ts"
+    "test": "env -u GEMINI_API_KEY tsx --test ../../tests/*.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.31.0",

@@ -235,7 +235,13 @@ export async function loadCanonicalPackage(
     correo,
     solicitud,
     cotizacion: quote,
-    aprobacion: approval,
+    aprobacion: approval
+      ? {
+          ...approval,
+          aprobado: /\baprobado\b/i.test(approval.cuerpo),
+          texto: approval.cuerpo,
+        }
+      : null,
     factura: invoice,
     faltantes,
   });
@@ -646,7 +652,7 @@ export const leer_paquete: Tool<typeof CaseArgs> = {
   async execute(args, ctx) {
     try {
       const paquete = await loadCanonicalPackage(ctx.directory, args.caso);
-      return success({ paquete, faltantes: paquete.faltantes });
+      return success({ ...paquete, paquete, faltantes: paquete.faltantes });
     } catch (error) {
       return failure(errorMessage(error));
     }

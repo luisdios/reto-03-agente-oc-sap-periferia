@@ -1,11 +1,12 @@
-import { defineConfig } from "vite";
+import { defineConfig, type UserConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { mockupPreviewPlugin } from "./mockupPreviewPlugin";
 
-const rawPort = process.env.PORT;
+export default defineConfig(async ({ command }): Promise<UserConfig> => {
+const rawPort = process.env.PORT ?? (command === "build" ? "8081" : undefined);
 
 if (!rawPort) {
   throw new Error(
@@ -19,7 +20,7 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const basePath = process.env.BASE_PATH;
+const basePath = process.env.BASE_PATH ?? (command === "build" ? "/__mockup" : undefined);
 
 if (!basePath) {
   throw new Error(
@@ -27,7 +28,7 @@ if (!basePath) {
   );
 }
 
-export default defineConfig({
+return {
   base: basePath,
   plugins: [
     mockupPreviewPlugin(),
@@ -68,4 +69,5 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: true,
   },
+};
 });

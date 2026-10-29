@@ -55,7 +55,10 @@ export const PaqueteSchema = z.object({
   correo: CorreoSchema,
   solicitud: SolicitudSchema,
   cotizacion: CotizacionSchema.nullable(),
-  aprobacion: AprobacionSchema.nullable(),
+  aprobacion: AprobacionSchema.extend({
+    aprobado: z.boolean(),
+    texto: z.string(),
+  }).nullable(),
   factura: FacturaSchema.nullable(),
   faltantes: z.array(z.string()).default([]),
 });

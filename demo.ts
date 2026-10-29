@@ -199,7 +199,7 @@ if (existsSync(out)) {
 }
 
 console.log(
-  "Demo determinística · SAP simulado · sin llamadas a Gemini · sin aprobar excepciones automáticamente",
+  "Demo determinística · SAP simulado · sin llamadas a Gemini · aprobación de sol-004 simulada explícitamente",
 );
 
 for (const caso of CASES) {
