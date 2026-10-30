@@ -825,9 +825,16 @@ export async function sendMessage(
   const session = getOrCreateSession(sessionId);
   const root = workspaceRoot();
 
-  if (session.pending) {
+  const requestedCase = caseFromText(message);
+
+if (session.pending) {
+  if (requestedCase && requestedCase !== session.pending.caso) {
+    session.pending = null;
+    session.contents = [];
+  } else {
     return confirmPending(session, root, message);
   }
+}
 
   session.messages.push(makeMessage("user", message));
   session.contents.push({ role: "user", parts: [{ text: message }] });
