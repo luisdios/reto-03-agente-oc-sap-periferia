@@ -176,7 +176,7 @@ function ChatPage() {
 
   const transmit = (message: string) => {
     if (!message.trim() || sendMutation.isPending) return;
-    const contextCase = needsConfirmation && pendingCase ? cases.find(item => item.caso === pendingCase) : selected;
+    const contextCase = selected;
     const fullMessage = contextCase ? `Caso seleccionado: ${contextCase.caso} (${contextCase.solicitudId}). ${message.trim()}` : message.trim();
     sendMutation.mutate({ data: { sessionId, message: fullMessage } }, {
       onSuccess: response => {

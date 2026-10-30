@@ -457,7 +457,9 @@ function payloadFromRuns(runs: ToolRun[]): OrdenCompra | null {
 }
 
 function caseFromText(message: string): string | null {
-  const match = message.match(/\bsol-00[1-6]\b/i);
+  // A case typed by the user takes precedence over the selector's context.
+  const match = withoutSelectedCasePrefix(message).match(/\bsol-00[1-6]\b/i)
+    ?? message.match(/\bsol-00[1-6]\b/i);
   return match?.[0].toLowerCase() ?? null;
 }
 
@@ -466,6 +468,17 @@ function withoutSelectedCasePrefix(message: string): string {
     /^\s*caso seleccionado:\s*sol-00[1-6]\s*\([^)]*\)\.\s*/i,
     "",
   );
+}
+
+function requestsCaseProcessing(message: string): boolean {
+  const normalized = withoutSelectedCasePrefix(message)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+  // Mentioning a different case in a confirmation or question is not a new request.
+  return /^(?:(?:por favor|ahora)[,\s]+)?(?:(?:quiero|necesito)\s+)?(?:procesa(?:r)?|revisa(?:r)?|analiza(?:r)?|tramita(?:r)?|muestrame)\b/.test(normalized)
+    || /^sol-00[1-6]\.?$/.test(normalized);
 }
 
 function requestsHold(message: string): boolean {
@@ -827,14 +840,18 @@ export async function sendMessage(
 
   const requestedCase = caseFromText(message);
 
-if (session.pending) {
-  if (requestedCase && requestedCase !== session.pending.caso) {
-    session.pending = null;
-    session.contents = [];
-  } else {
-    return confirmPending(session, root, message);
+  if (session.pending) {
+    if (
+      requestedCase &&
+      requestedCase !== session.pending.caso &&
+      requestsCaseProcessing(message)
+    ) {
+      session.pending = null;
+      session.contents = [];
+    } else {
+      return confirmPending(session, root, message);
+    }
   }
-}
 
   session.messages.push(makeMessage("user", message));
   session.contents.push({ role: "user", parts: [{ text: message }] });

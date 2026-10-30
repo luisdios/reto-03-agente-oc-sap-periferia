@@ -4,7 +4,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { after, before, test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import app from "../artifacts/api-server/src/app";
 import { readControlRecords } from "../artifacts/api-server/src/lib/control";
 import { workspaceRoot } from "../artifacts/api-server/src/lib/workspace-paths";
@@ -16,6 +16,7 @@ let server: Server;
 let baseUrl = "";
 
 type ChatResult = {
+  sessionId: string;
   reply: string;
   needsConfirmation: boolean;
   pendingCase: string | null;
@@ -27,7 +28,7 @@ type SavedOrder = {
   referencia: { solicitud_id: string };
 };
 
-before(async () => {
+beforeEach(async () => {
   assert.equal(Boolean(process.env.GEMINI_API_KEY), false, "HTTP tests must run without a model key");
   root = await mkdtemp(join(tmpdir(), "sap-agent-http-"));
   await cp(join(sourceRoot, "fixtures"), join(root, "fixtures"), { recursive: true });
@@ -43,7 +44,7 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${address.port}/api`;
 });
 
-after(async () => {
+afterEach(async () => {
   if (server) {
     await new Promise<void>((resolve, reject) =>
       server.close((error) => error ? reject(error) : resolve()),
@@ -60,7 +61,9 @@ async function message(sessionId: string, text: string): Promise<ChatResult> {
     body: JSON.stringify({ sessionId, message: text }),
   });
   assert.equal(response.status, 200);
-  return await response.json() as ChatResult;
+  const result = await response.json() as ChatResult;
+  assert.equal(result.sessionId, sessionId);
+  return result;
 }
 
 async function orders(): Promise<SavedOrder[]> {
@@ -150,4 +153,76 @@ test("HTTP: seis casos, confirmaciones ambiguas, cancelación, idempotencia, his
   const logs = (await readFile(join(root, "out/log.jsonl"), "utf8")).split("\n")
     .filter(Boolean).map((line) => JSON.parse(line) as { sessionId: string; type: string });
   assert.equal(logs.filter((row) => row.sessionId === "http-sol004" && row.type === "tool_call").length, calls.length);
+});
+
+test("Sesiones A: una solicitud explícita de otro caso descarta el pendiente y procesa el nuevo", async () => {
+  const session = "switch-case-A";
+  const count = (await orders()).length;
+  const pending = await message(session, "Procesa sol-001 pero no la crees.");
+  assert.equal(pending.pendingCase, "sol-001");
+  const switched = await message(session, "Procesa sol-002");
+  assert.equal(switched.pendingCase, null);
+  assert.equal(switched.needsConfirmation, false);
+  assert.match(switched.reply, /bloque/i);
+  assert.ok(switched.toolCalls.some(call =>
+    call.name === "oc_validar" && JSON.parse(call.args).caso === "sol-002",
+  ));
+  assert.equal((await orders()).length, count);
+  const history = await (await fetch(`${baseUrl}/sessions/${session}`)).json() as {
+    sessionId: string; pendingCase: string | null; messages: Array<{ content: string }>;
+  };
+  assert.equal(history.sessionId, session);
+  assert.equal(history.pendingCase, null);
+  assert.ok(history.messages.some(entry => entry.content.includes("Procesa sol-001")));
+  assert.ok(history.messages.some(entry => entry.content === "Procesa sol-002"));
+});
+
+test("Sesiones B: una respuesta sin otro caso conserva la confirmación pendiente", async () => {
+  const session = "switch-case-B";
+  const count = (await orders()).length;
+  await message(session, "Procesa sol-001 pero no la crees.");
+  const response = await message(session, "Muéstrame otra vez las validaciones");
+  assert.equal(response.pendingCase, "sol-001");
+  assert.equal(response.needsConfirmation, true);
+  assert.equal(response.toolCalls.length, 0);
+  assert.equal((await orders()).length, count);
+});
+
+test("Sesiones C: confirmar otro caso no descarta el pendiente ni crea órdenes", async () => {
+  const count = (await orders()).length;
+  for (const [session, pendingCase, otherCase] of [
+    ["switch-case-C", "sol-001", "sol-002"],
+    ["switch-case-C-clean-target", "sol-004", "sol-001"],
+  ]) {
+    await message(session, `Procesa ${pendingCase} pero no la crees.`);
+    const response = await message(session,
+      `Confirmo crear la orden ${otherCase} y acepto las excepciones mostradas.`);
+    assert.equal(response.pendingCase, pendingCase);
+    assert.equal(response.needsConfirmation, true);
+    assert.equal(response.toolCalls.length, 0);
+    assert.equal((await orders()).length, count);
+  }
+});
+
+test("Sesiones UI: el caso escrito prevalece sobre el prefijo y un caso limpio no pide confirmación", async () => {
+  const session = "switch-case-ui";
+  await message(session, "Procesa sol-004");
+  const switched = await message(session,
+    "Caso seleccionado: sol-004 (SOL-2026-004). Procesa sol-002");
+  assert.equal(switched.pendingCase, null);
+  assert.ok(switched.toolCalls.some(call =>
+    call.name === "oc_validar" && JSON.parse(call.args).caso === "sol-002",
+  ));
+  await message(session, "Procesa sol-004");
+  const automatic = await message(session,
+    "Caso seleccionado: sol-001 (SOL-2026-001). Procesa");
+  assert.equal(automatic.needsConfirmation, false);
+  assert.equal(automatic.pendingCase, null);
+  assert.ok(automatic.toolCalls.some(call => call.name === "oc_crear" && call.ok));
+  const beforeRetry = await orders();
+  assert.equal(beforeRetry.length, 1);
+  assert.equal(beforeRetry[0].referencia.solicitud_id, "SOL-2026-001");
+  const retry = await message(session, "Procesa sol-001");
+  assert.equal(retry.needsConfirmation, false);
+  assert.equal((await orders()).length, beforeRetry.length);
 });
